@@ -1,0 +1,695 @@
+---
+title: "Análises dos óbitos não maternos do período de 2010 a 2021"
+author: "Rafael Sant'Ana Herzog"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    toc: true
+    toc_float: true
+    toc_level: 1
+css: templates.css
+---
+
+<style>
+.main-container {
+  max-width: 1400px !important;
+  margin: auto;
+}
+
+.table caption, caption, .tab-caption {
+  font-weight: bold !important;
+  text-align: center !important;
+  color: #000 !important;
+}
+</style>
+
+```{r echo = FALSE, message = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE, message = FALSE, fig.align='center', warning = FALSE
+)
+```
+
+
+```{r}
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(rcompanion)
+library(kableExtra)
+library(summarytools)
+library(sf)
+library(ggplot2)
+library(gtsummary)
+library(gt)
+library(ggtext)
+library(reactable)
+library(reactablefmtr)
+library(knitr)
+
+#Lendo os dados completos
+dados <- read.csv("databases/Obitos_maternos_e_desconsiderados_2010_2021.csv") |>
+  filter(idade >= 10 & idade <= 49) |>
+  mutate(
+    faixa_etaria = case_when(
+      idade >= 10 & idade <= 14 ~ "10 a 14 anos",
+      idade >= 15 & idade <= 44 ~ "15 a 44 anos",
+      idade >= 45 & idade <= 49 ~ "45 a 49 anos"
+    ),
+    causabas_recodificada = ifelse(causabas_recodificada == "O999", "O998", causabas_recodificada)
+  )
+
+#Separando entre óbitos maternos e óbitos não maternos
+dados_maternos <- dados |>
+  filter(
+    obito_materno == "Sim"
+  )
+
+dados_nao_maternos <- dados |>
+  filter(
+    obito_materno == "Não"
+  )
+```
+
+# Sobre os dados
+
+Para ambos os grupos de óbitos (maternos e não maternos), foram considerados apenas os óbitos de mulheres em idade fértil (10 a 49 anos) que ocorreram nos anos de 2010 a 2021. Os óbitos não maternos (ou óbitos maternos desconsiderados) foram obtidos através do SIM, filtrando-se pelas mortes de gestantes e puérperas que ocorreram "durante a gravidez, parto ou aborto", "durante o puerpério, até 42 dias após o parto" ou com "período inconsistente", sem se considerar aquelas cujas causas de óbitos pertenciam ao capítulo "XX. Causas externas de morbidade e mortalidade", da CID-10.
+
+
+# Descrição geral dos dois grupos por ano
+
+Em relação aos óbitos maternos oficiais, foram contabilizados, no período de 2010 a 2021, `r formatC(nrow(dados_maternos), big.mark = ".", decimal.mark = ",")` óbitos. Observando a **Figura 1** e a **Tabela 1**, podemos perceber que, apesar de leves variações, o número de óbitos maternos se mantém relativamente constante ao longo dos anos de 2010 a 2019, sofrendo um aumento considerável no ano de 2020, quando se iniciou a pandemia da COVID-19, e um aumento ainda maior em 2021, de 54% sobre o total do ano anterior. Esse mesmo padrão, entretanto, não é observado para os óbitos maternos desconsiderados, que contabilizaram `r formatC(nrow(dados_nao_maternos), big.mark = ".", decimal.mark = ",")` registros no período de 2010 a 2021. Como podemos observar por meio da **Figura 2** e da **Tabela 2**, os óbitos maternos desconsiderados mostraram um padrão de diminuição ao longo dos anos de 2010 a 2013, se mantendo relativamente constantes ao longo dos anos de 2014 a 2016 e, após uma leve diminuição de 2016 para 2017, mantendo-se relativamente constantes nos anos de 2017 a 2020. Esse grupo de óbitos, diferente dos óbitos maternos oficiais, não apresentou um aumento de registros no ano de 2020. Entretanto, assim como ocorreu com o primeiro grupo, o número de óbitos maternos desconsiderados aumentou significativamente no ano de 2021, tendo sido registrado um número 42% maior que o total do ano anterior.
+
+```{r results='asis'}
+kable(
+  table(dados_maternos$ano_obito), 
+  col.names = c("Ano", "Nº de óbitos"),
+  align = "c",
+  caption = "Número de óbitos maternos oficiais por ano no período de 2010 a 2021."
+) 
+```
+
+```{r}
+dados_maternos_plot1 <- dados_maternos |>
+  mutate(obitos = 1) |>
+  group_by(ano_obito, obitos) |>
+  summarise(obitos = sum(obitos)) |>
+  ungroup()
+
+ggplot(data = dados_maternos_plot1, aes(x = as.factor(ano_obito), y = obitos)) +
+  geom_bar(stat = "identity", fill = "#1E5AA0") +
+  labs(
+    x = "Ano",
+    y = "Óbitos",
+    subtitle = "<b>Figura 1:</b> Óbitos maternos oficiais por ano no período de 2010 a 2021."
+  ) +
+  geom_text(
+    aes(label = obitos),
+    vjust = -0.5,
+    position = position_dodge(1),
+    size = 3.2
+  ) +
+  theme_bw() +
+  theme(plot.subtitle = element_markdown(hjust = 0.5, size = 10.5))
+```
+
+
+```{r}
+kable(
+  table(dados_nao_maternos$ano_obito), 
+  col.names = c("Ano", "Nº de óbitos"),
+  align = "c",
+  caption = "Número de óbitos maternos desconsiderados por ano no período de 2010 a 2021."
+)
+```
+
+
+```{r}
+dados_nao_maternos_plot1 <- dados_nao_maternos |>
+  mutate(obitos = 1) |>
+  group_by(ano_obito, obitos) |>
+  summarise(obitos = sum(obitos)) |>
+  ungroup()
+
+ggplot(data = dados_nao_maternos_plot1, aes(x = as.factor(ano_obito), y = obitos)) +
+  geom_bar(stat = "identity", fill = "#1E5AA0") +
+  labs(
+    x = "Ano",
+    y = "Óbitos",
+    subtitle = "<b>Figura 2:</b> Óbitos maternos desconsiderados por ano no período de 2010 a 2021."
+  ) +
+  geom_text(
+    aes(label = obitos),
+    vjust = -0.5,
+    position = position_dodge(1),
+    size = 3.2
+  ) +
+  theme_bw() +
+  theme(plot.subtitle = element_markdown(hjust = 0.5, size = 10.5))
+
+```
+
+# Verificando a associação entre as variáveis e os grupos de óbitos
+
+```{r}
+my_theme <- list(
+    "style_number-arg:big.mark" = ".",
+    "style_number-arg:decimal.mark" = ","
+)
+
+set_gtsummary_theme(my_theme)
+```
+
+```{r}
+gera_tabela_cruzada <- function(df, var, var_label, legenda, ref_cat = NULL, seed = 1310) {
+  set.seed(seed)
+  
+  # --- Segurança ---
+  if (!all(c(var, "obito_materno") %in% names(df))) {
+    stop("As colunas especificadas não existem no dataframe.")
+  }
+  
+  # --- Tabela cruzada ---
+  tab <- table(df[[var]], df$obito_materno)
+  
+  # --- Teste qui-quadrado ---
+  qui <- suppressWarnings(chisq.test(tab))
+  pval <- qui$p.value
+  pval_text <- ifelse(pval < 0.001, "<0.001", sprintf("%.3f", pval))
+  
+  # --- Categoria de referência ---
+  if (is.null(ref_cat)) {
+    ref_cat <- rownames(tab)[which.max(rowSums(tab))]
+  }
+  if (!ref_cat %in% rownames(tab)) {
+    stop(paste0("A categoria de referência '", ref_cat, "' não foi encontrada em ", var))
+  }
+  
+  # --- Função auxiliar: OR e d de Cohen ---
+  calc_or_ref <- function(tab, categoria_ref, categoria_alvo, sucesso = "Não") {
+    a <- tab[categoria_alvo, sucesso]
+    b <- tab[categoria_alvo, setdiff(colnames(tab), sucesso)]
+    c <- tab[categoria_ref, sucesso]
+    d <- tab[categoria_ref, setdiff(colnames(tab), sucesso)]
+    
+    # Correção de continuidade
+    if (any(c(a,b,c,d) == 0)) { a <- a + 0.5; b <- b + 0.5; c <- c + 0.5; d <- d + 0.5 }
+    
+    OR <- (a/b) / (c/d)
+    se_log_or <- sqrt(1/a + 1/b + 1/c + 1/d)
+    log_or <- log(OR)
+    ci_or <- exp(log_or + c(-1,1)*1.96*se_log_or)
+    
+    # --- d de Cohen e IC ---
+    d <- log_or * (sqrt(3) / pi)
+    ci_d <- log(ci_or) * (sqrt(3) / pi)
+    
+    list(
+      OR_text = sprintf("%.2f (%.2f–%.2f)", OR, ci_or[1], ci_or[2]),
+      d_text  = sprintf("%.2f (%.2f–%.2f)", d, ci_d[1], ci_d[2])
+    )
+  }
+  
+  # --- Odds ratios e d de Cohen ---
+  categorias <- rownames(tab)
+  resultados <- lapply(categorias, function(cat) {
+    if (cat == ref_cat) return(list(OR_text = "Ref.", d_text = "Ref."))
+    calc_or_ref(tab, ref_cat, cat)
+  })
+  
+  odds_ratios <- sapply(resultados, `[[`, "OR_text")
+  cohens_d    <- sapply(resultados, `[[`, "d_text")
+  
+  # --- Função para formatar números ---
+  format_num <- function(x) {
+    formatC(as.numeric(x), big.mark = "\u202f", decimal.mark = ".", format = "f", digits = 0)
+  }
+  
+  # --- Data.frame com contagem + percentual ---
+  tab_df <- as.data.frame.matrix(tab) %>%
+    tibble::rownames_to_column(" ") %>%
+    mutate(
+      ` `   = paste0("&nbsp;&nbsp;&nbsp;&nbsp;", ` `),
+      Total = `Não` + Sim,
+      
+      # --- Percentuais por coluna (colunas somam 100%) ---
+      perc_nao = 100 * `Não` / sum(`Não`),
+      perc_sim = 100 * Sim  / sum(Sim),
+      
+      `Não` = paste0(format_num(`Não`), " (", sprintf("%.1f", perc_nao), "%)"),
+      Sim   = paste0(format_num(Sim),  " (", sprintf("%.1f", perc_sim), "%)"),
+      Total = paste0(format_num(Total)," (", sprintf("%.1f", 100 * Total / sum(Total)), "%)"),
+      
+      `P-valor (qui-quadrado)` = "",
+      `Odds Ratio (IC 95%)` = odds_ratios,
+      `d de Cohen (IC 95%)` = cohens_d
+    ) %>%
+    select(-perc_nao, -perc_sim)
+
+  
+  # --- Linha de cabeçalho ---
+  header_row <- as.data.frame(matrix("", nrow = 1, ncol = ncol(tab_df)))
+  colnames(header_row) <- colnames(tab_df)
+  header_row[1, ] <- c(
+    paste0("<b>", var_label, "</b><br><small>(Ref: ", ref_cat, ")</small>"),
+    "", "", "", 
+    pval_text,
+    "", ""
+  )
+  tab_df <- bind_rows(header_row, tab_df)
+  
+  # --- Linha de totais ---
+  totals <- data.frame(
+    " "   = "<b>Total</b>",
+    "Não" = paste0(format_num(sum(tab[, "Não"])), " (100.0%)"),
+    "Sim" = paste0(format_num(sum(tab[, "Sim"])), " (100.0%)"),
+    "Total" = paste0(format_num(sum(tab)), " (100.0%)"),
+    "P-valor (qui-quadrado)" = "",
+    "Odds Ratio (IC 95%)" = "",
+    "d de Cohen (IC 95%)" = "",
+    check.names = FALSE
+  )
+  tab_df <- bind_rows(tab_df, totals)
+  
+  # --- Exibir tabela ---
+  tab_df %>%
+    kbl(escape = FALSE, align = "lcccccc", booktabs = TRUE, caption = legenda) %>%
+    add_header_above(
+      c(
+        " " = 1,
+        "Óbito materno" = 2,
+        " " = 1,
+        " " = 1,
+        " " = 1,
+        " " = 1
+      ),
+      line_sep = 0
+    ) %>%
+    kable_styling(full_width = FALSE, position = "center")
+}
+```
+
+Com o intuito de verificar a associação entre cada variável e os grupos de óbito, apresentamos, nas tabelas abaixo, os resultados do teste qui-quadrado de Pearson e os valores das razões de chances (odds ratio) e dos $d$ de Cohen relacionados, bem como seus respectivos intervalos de confiança.
+
+O teste qui-quadrado de Pearson testa a hipótese de que as categorias da variável "óbito materno" ("Sim" e "Não") são independentes das categorias da variável que forma as linhas da tabela cruzada (raça/cor, escolaridade, estado civil, etc.). Em outras palavras, a rejeição da hipótese nula nos dá evidências para acreditar que a distribuição dos óbitos maternos difere da dos não maternos em relação à variável analisada. o grupo de óbitos maternos e o grupo de óbitos não maternos são diferentes em relação à outra variável que compõe a tabela cruzada. 
+
+A razão de chances, por outro lado, é uma estatística de tamanho de efeito que quantifica a associação entre duas variáveis categóricas. Definimos a "chance" como a razão entre a probabilidade de ocorrência de um evento e a probabilidade de sua não ocorrência — isto é, o quão mais provável o evento é de ocorrer do que de não ocorrer. Assim, quando uma das variáveis possui mais de duas categorias, como ocorre nesta análise, o cálculo da razão de chances requer uma adaptação: devemos escolher uma categoria como referência, sendo as demais categorias comparadas a ela. Considerando sempre a chance relacionada aos óbitos não maternos no numerador, a razão de chances expressa, então, o quão mais (ou menos) provável é a ocorrência de uma categoria em relação à referência no grupo dos óbitos não maternos quando comparado ao grupo dos óbitos maternos.  
+
+Por fim, o $d$ de Cohen é uma estatística de tamanho de efeito que quantifica a diferença padronizada entre dois grupos. Embora originalmente proposto para variáveis quantitativas, o $d$ de Cohen pode ser adaptado para variáveis categóricas ao ser calculado diretamente através das razões de chances, como discutido por Sánchez-Meca, Marín-Martínez e Chacón-Moscoso (2003). Nessa adaptação, o $d$ é calculado segundo a relação:
+
+\begin{equation}
+d = \log(OR) \times \frac{\sqrt{3}}{\pi},
+(\#eq:cohen)
+\end{equation}
+
+onde OR representa a razão de chances. Em geral, valores de $d$ em torno de 0,2 são considerados efeitos pequenos, em torno de 0,5, médios, e acima de 0,8, grandes (Cohen, 1988). Nesta análise, verificamos se um efeito é pequeno, médio ou grande ao verificar se os intervalos de confiança do respectivo $d$ de Cohen continha algum desses valores.
+
+Para todas as análises, foi adotado um nível de significância de 0,05. Para as razões de chance, foram escolhidas como categorias de referência aquelas associadas, em geral, ao menor risco. Detalhes sobre o cálculo das razões de chance, bem como de seus intervalos de confiança assintóticos, podem ser consultados em Fleiss, Levin e Paik (2003). Para o $d$ de Cohen, os intervalos de confiança foram obtidos aplicando a transformação apresentada na **Equação \@ref(eq:cohen)** aos limites dos intervalos de confiança das razões de chances. Por fim, para todas as tabelas, foram considerados apenas os óbitos válidos, sendo excluídos valores não preenchidos ou marcados como "Ignorado".
+
+- **Para a variável "raça/cor":** observando a **Tabela 3**, como o p-valor do teste qui-quadrado não é menor que 0,05, **não** rejeitamos a hipótese nula de independência entre as categorias das variáveis "óbito materno" e "raça/cor". Assim, **não temos evidências** para acreditar que a distribuição da raça/cor das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos. Essa falta de associação também pode ser verificada pelas raões de chances, cujos intervalos de confiança contiveram o valor 1 (que indica chances iguais) para todas as categorias.
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(raca_cor != "Ignorado"),
+  var = "raca_cor",
+  var_label = "Raça/cor", 
+  legenda = 'Tabela cruzada entre as variáveis "raça/cor" e "óbito materno".',
+  ref_cat = "Branca"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável "faixa etária":** observando a **Tabela 4**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “faixa etária”. Assim, temos evidências para acreditar que a distribuição da faixa etária das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos. 
+
+  Considerando mulheres de 15 a 44 anos como referência, uma análise da tabela mostra que óbitos de mulheres com 10 a 14 anos apresentaram chance 2.09 vezes maior de ocorrerem entre os óbitos não maternos (IC 95%: 1.54–2.83, efeito médio). Da mesma forma, óbitos de mulheres com 45 a 49 anos apresentaram 12.70 vezes mais chances (IC 95%: 10.64–15.15, efeito grande).
+
+```{r}
+gera_tabela_cruzada(
+  dados,
+  var = "faixa_etaria",
+  var_label = "Faixa etária", 
+  legenda = 'Tabela cruzada entre as variáveis "faixa etária" e "óbito materno".',
+  ref_cat = "15 a 44 anos"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “escolaridade”:** observando a **Tabela 5**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “escolaridade”. Assim, temos evidências para acreditar que a distribuição do nível de escolaridade das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos. 
+
+  Uma análise da tabela mostra que, em comparação com os óbitos maternos, o grupo de óbitos não maternos apresentou, proporcionalmente, menor escolaridade. Considerando mulheres com ensino superior completo como referência, mulheres sem escolaridade apresentaram chance 3.22 vezes maior de estarem entre os óbitos não maternos (IC 95%: 2.45-4.23, efeito médio). Da mesma forma, mulheres com apenas ensino fundamental I completo apresentaram chance 1.88 vezes maior (IC 95%: 1.52-2.31, efeito pequeno), enquanto mulheres com apenas ensino fundamental II completo apresentaram 1.39 vezes mais chances (IC 95%: 1.14-1.70, efeito pequeno).
+
+
+```{r}
+dados$escolaridade <- factor(dados$escolaridade, levels = c("Sem escolaridade", "Fundamental I", "Fundamental II", "Médio", "Superior incompleto", "Superior completo"))
+
+gera_tabela_cruzada(
+  dados |> filter(escolaridade != "Ignorado"),
+  var = "escolaridade",
+  var_label = "Escolaridade", 
+  legenda = 'Tabela cruzada entre as variáveis "escolaridade" e "óbito materno".',
+  ref_cat = "Superior completo"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “estado civil”:** observando a **Tabela 6**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “estado civil”. Assim, temos evidências para acreditar que a distribuição do estado civil das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos. 
+
+  Considerando mulheres casadas como referência, uma análise da tabela mostra que mulheres divorciadas apresentaram chance 1.52 vezes maior de estarem entre os óbitos não maternos (IC 95%: 1.20-1.91, efeito pequeno). Da mesma forma, mulheres viúvas apresentaram chance 2.05 vezes maior (IC 95%: 1.45-2.90, efeito médio).
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(estado_civil != "Ignorado"),
+  var = "estado_civil",
+  var_label = "Estado civil", 
+  legenda = 'Tabela cruzada entre as variáveis "estado civil" e "óbito materno".',
+  ref_cat = "Casado"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “local de ocorrência do óbito”:** observando a **Tabela 7**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “local de ocorrência do óbito”. Assim, temos evidências para acreditar que a distribuição do local de ocorrência do óbito das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos.
+
+  Considerando óbitos em hospital como referência, uma análise da tabela mostra que óbitos em domicílio apresentaram chance 2.87 vezes maior de ocorrerem entre os óbitos não maternos (IC 95%: 2.51-3.28, efeito médio). Da mesma forma, óbitos em outros estabelecimentos de saúde apresentaram chance 1.75 vezes maior (IC 95%: 1.45-2.12, efeito pequeno), óbitos em via pública apresentaram chance 2.05 vezes maior (IC 95%: 1.54-2.73, efeito médio) e óbitos em outros locais apresentaram 1.69 vezes mais chances (IC 95%: 1.33-2.14, efeito pequeno).
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(local_de_ocorrencia != "Ignorado"),
+  var = "local_de_ocorrencia",
+  var_label = "Local de ocorrência do óbito", 
+  legenda = 'Tabela cruzada entre as variáveis "local de ocorrência do óbito" e "óbito materno".',
+  ref_cat = "Hospital"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “período do óbito”:** observando a **Tabela 8**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “período do óbito”. Assim, temos evidências para acreditar que a distribuição do período do óbito das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos.
+
+  Considerando óbitos durante o puerpério, até 42 dias, como referência, uma análise da tabela mostra que óbitos durante a gravidez, parto ou aborto apresentaram chance 2.63 vezes maior de ocorrerem entre os óbitos não maternos (IC 95%: 2.45-2.84, efeito médio). Da mesma forma, óbitos com período inconsistente apresentaram 2.54 vezes mais chances (IC 95%: 1.85-3.48, efeito médio).
+
+  **OBS.:** como, para os óbitos não maternos, os períodos considerados nesta análise são apenas “durante a gravidez, parto ou aborto”, “durante o puerpério, até 42 dias após o parto” e “período inconsistente”, a **Tabela 8** apresenta, para o grupo de óbitos maternos, apenas aqueles que ocorreram nesses mesmos três períodos de óbito.
+
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(periodo_do_obito %in% c("Durante a gravidez, parto ou aborto", "Durante o puerpério, até 42 dias", "Período inconsistente")),
+  var = "periodo_do_obito",
+  var_label = "Período do óbito", 
+  legenda = 'Tabela cruzada entre as variáveis "período do óbito" e "óbito materno".',
+  ref_cat = "Durante o puerpério, até 42 dias"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “tipo de morte materna”:** observando a **Tabela 9**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “tipo de morte materna”. Assim, temos evidências para acreditar que a distribuição do tipo de morte materna das gestantes e puérperas falecidas difere entre os óbitos maternos e os óbitos não maternos. 
+
+  Considerando óbitos por causas obstétricas diretas como referência, uma análise da tabela mostra que óbitos indiretos apresentaram chance 24.01 maior de ocorrerem entre os óbitos não maternos (IC 95%: 20.69–27.86, efeito grande). Da mesma forma, óbitos por causas não especificados apresentaram 56.02 vezes mais chances (IC 95%: 46.72–67.17, efeito grande).
+
+  **OBS.:** para os óbitos não maternos, essa variável foi criada com base nas causas básicas recodificadas.
+
+```{r}
+gera_tabela_cruzada(
+  dados,
+  var = "tipo_de_morte_materna",
+  var_label = "Tipo de morte materna", 
+  legenda = 'Tabela cruzada entre as variáveis "tipo de morte materna" e "óbito materno".',
+  ref_cat = "Direta"
+)
+```
+
+
+<br>
+<br>
+
+- **Para a variável “investigação por CMM”:** observando a **Tabela 10**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “investigação por CMM”. Assim, temos evidências para acreditar que a distribuição do percentual de óbitos investigados por conselhos de morte materna difere entre os óbitos maternos e os óbitos não maternos.
+
+  Uma análise da tabela mostra que óbitos não investigados por CMM apresentaram maiores chances de ocorrerem entre os óbitos não maternos, com chance 1.17 vezes maior (IC 95%: 1.04-1.31, efeito pequeno).
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(investigacao_cmm != "Sem informação"),
+  var = "investigacao_cmm",
+  var_label = "Investigação por CMM", 
+  legenda = 'Tabela cruzada entre as variáveis "investigação por CMM" e "óbito materno".',
+  ref_cat = "Sim"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “algum tipo de investigação”:** observando a **Tabela 11**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “algum tipo de investigação”. Assim, temos evidências para acreditar que o percentual de óbitos investigados por alguma fonte de investigação difere entre os óbitos maternos e os óbitos não maternos.
+
+  Uma análise da tabela mostra que óbitos com investigação ignorada ou não preenchida apresentaram maiores chances de ocorrerem entre os óbitos não maternos, com chance 2.87 vezes maior (IC 95%: 2.66-3.08, efeito médio).
+
+  **OBS.:** essa é a única tabela da análise em que foram considerados todos os registros de óbitos para ambos os grupos. Ou seja, foram considerados, também, valores não preenchidos de FONTEINV. Isso porque, quando eram considerados apenas os casos válidos, apenas 2 registros de óbitos não maternos, ambos em 2021, tiveram a variável FONTEINV marcada com o valor 9 (“Ignorado”), e apenas 6 óbitos maternos tiveram esse valor marcado ao longo de todo o período. Assim, a comparação não faria sentido.
+
+```{r}
+gera_tabela_cruzada(
+  dados |> mutate(investigacao = if_else(fonteinv != 9, "Sim", "Ignorado ou não preenchido", missing = "Ignorado ou não preenchido")),
+  var = "investigacao",
+  var_label = "Algum tipo de investigação", 
+  legenda = 'Tabela cruzada entre as variáveis "algum tipo de investigação" e "óbito materno".',
+  ref_cat = "Sim"
+)
+```
+
+<br>
+<br>
+
+- **Para a variável “assistência médica”:** observando a **Tabela 12**, como o p-valor do teste qui-quadrado é menor que 0,05, rejeitamos a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “assistência médica”. Assim, temos evidências para acreditar que o percentual de óbitos que apresentaram assistência médica difere entre os óbitos maternos e os óbitos não maternos. 
+
+  Uma análise da tabela mostra que óbitos sem assistência médica apresentaram maiores chances de ocorrerem entre os óbitos não maternos, com chance 4.15 vezes maior (IC 95%: 3.64-4.73, efeito grande).
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(assistencia_medica != "Ignorado"),
+  var = "assistencia_medica",
+  var_label = "Assistência médica", 
+  legenda = 'Tabela cruzada entre as variáveis "assistência médica" e "óbito materno".',
+  ref_cat = "Com assistência"
+)
+```
+
+
+<br>
+<br>
+
+- **Para a variável “necrópsia”:** observando a **Tabela 13**, como o p-valor do teste qui-quadrado é maior que 0,05, **não rejeitamos** a hipótese nula de independência entre as categorias das variáveis “óbito materno” e “necrópsia”. Assim, **não temos evidências** para acreditar que o percentual de óbitos em que foi realizada necrópsia difere entre os óbitos maternos e os óbitos não maternos.
+
+```{r}
+gera_tabela_cruzada(
+  dados |> filter(necropsia != "Ignorado"),
+  var = "necropsia",
+  var_label = "Necrópsia", 
+  legenda = 'Tabela cruzada entre as variáveis "necrópsia" e "óbito materno".',
+  ref_cat = "Sim"
+)
+```
+
+<br>
+
+Em suma, temos, em comparação ao grupo de óbitos maternos, que o grupo de óbitos não maternos apresenta
+
+- maiores chances de baixa escolaridade em relação a ensino superior completo;
+- maiores chances de mulheres divorciadas e de mulheres viúvas em relação à mulheres casadas;
+- maiores chances de óbitos em óbitos em domicílio, via pública, outros estabelecimentos de saúde e outros locais em relação a óbitos em hospital;
+- maiores chance de óbitos durante a gravidez, parto ou aborto e com período inconsistente em relação a óbitos durante o puerpério, até 42 dias após o parto;
+- maiores chances de óbitos por causas obstétricas indiretas e não especificadas em relação à óbitos por causas diretas;
+- menor chance de óbitos investigados por comitês de mortalidade materna;
+- menor chance de óbitos investigados por alguma fonte de investigação;
+- menor chance de óbitos com assistência médica.
+
+# Frequências das novas recodificações
+
+Na **Tabela 14**, são apresentadas todas as causas básicas que substituíram alguma causa básica original nos anos de 2010 a 2021, juntamente com as respectivas frequências de recodificação no período. Para as quatro causas básicas com maior número de recodificações (O994, O998, O95 e O995), são apresentadas, na **Figura 3**, as frequências anuais de recodificação de cada uma. Para todos os gráficos, um padrão semelhante ao observado na **Figura 2** pode ser encontrado: as recodificações apresentam um valor máximo em 2010, diminuem até 2013, se mantêm relativamente constantes ao longo dos anos de 2014 a 2016 - para O95 e O995 - e ao longo dos anos 2014 e 2015 - para O994 e O998 - e se mantêm relativamente constantes nos anos de 2017 a 2020. Não foram registrados grandes aumentos no ano de 2021.
+
+```{r}
+kable(
+  sort(table(dados_nao_maternos$causabas_recodificada), decreasing = TRUE), 
+  col.names = c("Causa básica recodificada", "Frequência"),
+  align = "c",
+  caption = "**Table 14:** Frequências de recodificação das novas causas básicas no período de 2012 a 2021."
+) 
+
+```
+
+```{r out.width="100%"}
+dados_nao_maternos_plot2 <- dados_nao_maternos |>
+  mutate(obitos = 1) |>
+  filter(causabas_recodificada %in% c("O994", "O998", "O95", "O995")) |>
+  group_by(ano_obito, causabas_recodificada, obitos) |>
+  summarise(obitos = sum(obitos)) |>
+  ungroup()
+
+ggplot(data = dados_nao_maternos_plot2, aes(x = as.factor(ano_obito), y = obitos)) +
+  geom_bar(stat = "identity", fill = "#1E5AA0") +
+  ylim(0, 200) +
+  labs(
+    x = "Ano",
+    y = "Óbitos",
+    subtitle = "<b>Figura 3:</b> Frequências de recodificação por ano das causas básicas que mais substituíram<br>causas básicas originais no período de 2010 a 2021."
+  ) +
+  facet_wrap(causabas_recodificada ~ .) +
+  geom_text(
+    aes(label = obitos),
+    vjust = -0.5,
+    position = position_dodge(1),
+    size = 3.2
+  ) +
+  theme_bw() +
+  theme(plot.subtitle = element_markdown(hjust = 0.5, size = 8), axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+
+Por outro lado, na **Tabela 15**, são apresentadas todas as causas básicas originais que foram substituídas ao menos uma vez nos anos de 2010 a 2021, juntamente com as respectivas frequências de substituição no período. Para as quatro causas básicas com maior número de substituições (R99, I219, J189, A419), são apresentadas, na **Figura 4**, as frequências anuais de substituição de cada uma. 
+
+```{r, results='asis'}
+cat("<div style='text-align:center'><b>Table 15: Frequências de substituição das causas básicas originais no período de 2012 a 2021.</b></div><br>")
+
+dados_tabela13 <- as.data.frame(sort(table(dados_nao_maternos$causabas), decreasing = TRUE))
+colnames(dados_tabela13) <- c("causabas", "freq")
+
+dados_tabela13 |>
+  reactable(
+    columns = list(
+      causabas = colDef(name = "Causa básica original", align = "center"),
+      freq = colDef(name = "Frequência", align = "center")
+    ),
+    defaultPageSize = 20
+  )
+```
+
+```{r out.width="100%"}
+dados_nao_maternos_plot3 <- dados_nao_maternos |>
+  mutate(obitos = 1) |>
+  filter(causabas %in% c("R99", "I219", "J189", "A419")) |>
+  group_by(ano_obito, causabas, obitos) |>
+  summarise(obitos = sum(obitos)) |>
+  ungroup()
+
+ggplot(data = dados_nao_maternos_plot3, aes(x = as.factor(ano_obito), y = obitos)) +
+  geom_bar(stat = "identity", fill = "#1E5AA0") +
+  ylim(0, 200) +
+  labs(
+    x = "Ano",
+    y = "Óbitos",
+    subtitle = "<b>Figura 4:</b> Frequências de substituição por ano das causas básicas originais que mais foram substituídas no período de 2010 a 2021."
+  ) +
+  facet_wrap(causabas ~ .) +
+  geom_text(
+    aes(label = obitos),
+    vjust = -0.5,
+    position = position_dodge(1),
+    size = 3.2
+  ) +
+  theme_bw() +
+  theme(plot.subtitle = element_markdown(hjust = 0.5, size = 8), axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+
+# Mapas das RMMs não corrigidas das UFs
+
+Na **Figura 5**, são apresentados os mapas das RMMs não corrigidas das UFs do período de 2010 a 2021 quando considerados apenas os óbitos maternos oficiais (à esquerda) e quando considerados, além dos óbitos maternos oficiais, os óbitos não maternos (à direita). Os valores das RMMs para cada estado no período considerado podem ser vistos na **Tabela 15**.
+
+
+```{r out.width="100%"}
+#Mapas da RMM
+##Baixando os arquivos necessários para a construção do mapa
+
+# link_ufs <- "ftp://geoftp.ibge.gov.br/organizacao_do_territorio/malhas_territoriais/malhas_municipais/municipio_2020/Brasil/BR/BR_UF_2020.zip"
+# download.file(url = link_ufs, destfile = 'BR_UF_2020.zip')
+# unzip(zipfile = 'BR_UF_2020.zip')
+
+br_ufs <- st_read(dsn = "databases/dados_mapa/BR_UF_2020.shp",
+                  stringsAsFactors = FALSE,
+                  quiet = TRUE)
+
+##Lendo os dados de nascidos vivos por UF nos anos de 2010 a 2021
+dados_nascidos <- read.csv("databases/Nascimentos_muni2010_2021.csv") |>
+  rename(res_sigla_uf = uf) |>
+  group_by(res_sigla_uf) |>
+  summarise(nascidos = sum(nascidos))
+
+##Criando um data.frame com os óbitos maternos oficiais por UF
+dados_obitos_oficiais <- dados_maternos |>
+  mutate(obitos = 1, tipo = 1) |>
+  group_by(res_sigla_uf, tipo) |>
+  summarise(obitos = sum(obitos)) |>
+  ungroup()
+
+##Criando um data.frame com os óbitos maternos oficiais e desconsiderados por UF
+dados_obitos_adicionais <- dados |>
+  mutate(obitos = 1, tipo = 2) |>
+  group_by(res_sigla_uf, tipo) |>
+  summarise(obitos = sum(obitos)) |>
+  ungroup()
+
+##Criando um data.frame com a RMM oficial
+dados_rmm_oficial <- full_join(dados_obitos_oficiais, dados_nascidos, by = join_by(res_sigla_uf)) |>
+  mutate(rmm = round(obitos/nascidos * 100000, 2)) |>
+  select(SIGLA_UF = res_sigla_uf, rmm, tipo)
+
+##Criando um data.frame com a RMM "adicional"
+dados_rmm_adicional <- full_join(dados_obitos_adicionais, dados_nascidos, by = join_by(res_sigla_uf)) |>
+  mutate(rmm = round(obitos/nascidos * 100000, 2)) |>
+  select(SIGLA_UF = res_sigla_uf, rmm, tipo)
+
+##Juntando os dois data.frames
+dados_rmm <- rbind(dados_rmm_oficial, dados_rmm_adicional)
+
+##Juntando as coordenadas do mapa com as RMMs
+dados_mapa_rmm <- full_join(br_ufs, dados_rmm, by = join_by(SIGLA_UF))
+
+##Criando os mapas das duas RMMs 
+ggplot(dados_mapa_rmm) +
+  aes(fill = rmm) +
+  geom_sf(size = 0.5) +
+  facet_wrap(tipo ~ .) +
+  scale_fill_viridis_c(option = "viridis", direction = -1) +
+  labs(
+    subtitle = "<b>Figura 5:</b> RMM oficial (à esquerda) e considerando óbitos adicionais (à direita) por UF no período de 2010 a 2021.",
+    fill = "RMM"
+  ) +
+  theme_minimal() +
+  theme(plot.subtitle = element_markdown(hjust = 0.5, size = 8))
+```
+
+```{r tabela-16, results='asis'}
+cat("<div style='text-align:center'><b>Table 15: RMMs oficiais e adicionais por UF no período de 2010 a 2021.</b></div><br>")
+
+dados_tabela_rmm <- full_join(
+  dados_rmm_oficial |> select(uf = SIGLA_UF, rmm_oficial = rmm), 
+  dados_rmm_adicional |> select(uf = SIGLA_UF, rmm_adicional = rmm),
+  by = "uf"
+)
+
+dados_tabela_rmm |>
+  reactable(
+    columns = list(
+      uf = colDef(name = "UF", align = "center"),
+      rmm_oficial = colDef(name = "RMM oficial", align = "center", format = colFormat(separators = TRUE)),
+      rmm_adicional = colDef(name = "RMM adicional", align = "center", format = colFormat(separators = TRUE))
+    ),
+    defaultPageSize = 30
+  )
+```
+
+# Referências
+
+Fleiss, J. L., Levin, B., & Paik, M. C. (2003). Statistical Methods for Rates and Proportions (3rd ed.). Hoboken, NJ: John Wiley & Sons.
+
+Cohen, J. (1988). Statistical Power Analysis for the Behavioral Sciences (2nd ed.). Hillsdale, NJ: Lawrence Erlbaum Associates.
+
+Sánchez-Meca, J., Marín-Martínez, F., & Chacón-Moscoso, S. (2003). Effect-size indices for dichotomized outcomes in meta-analysis. Psychological Methods, 8(4), 448–467. https://doi.org/10.1037/1082-989X.8.4.448
